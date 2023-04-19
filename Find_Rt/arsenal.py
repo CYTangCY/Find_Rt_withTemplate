@@ -72,17 +72,25 @@ def evaluate(output, target):
 
     return mse, rmse, mae, lg10, absrel, delta1, delta2, delta3, irmse, imae
 
-def makewall(WallDistance0, focalLength0, width0, height0, hg):
+def makewall(WallDistance0, width0, height0, hg ,K_in):
+    translation_O = np.array([0, 0, 0]).reshape(3, 1)
+    translation_1 = np.array([[0, 0, 0, 1]])
     WallDistance = WallDistance0
     width = width0
     height = height0
     grid = hg*2
-    focalLength = focalLength0
 
-    K = np.array([[focalLength, 0, width/2, 0],
-                  [0, focalLength, height/2, 0],
-                  [0, 0, 1, 0],
-                  [0, 0, 0, 1]])
+    # K = np.array([[focalLength, 0, width/2, 0],
+    #               [0, focalLength, height/2, 0],
+    #               [0, 0, 1, 0],
+    #               [0, 0, 0, 1]])
+    K = K_in
+    # print(K.shape)
+    K = np.concatenate((K, translation_O), axis=1)
+    # print(K.shape)
+    # print(translation_1.shape)
+    K = np.concatenate((K, translation_1), axis=0)
+    
     K_inv = LA.inv(K)
 
     rotation = [0, 0, 0]

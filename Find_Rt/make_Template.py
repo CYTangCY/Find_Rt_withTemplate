@@ -17,29 +17,29 @@ def make_Ideal_TF(wall, K_03, wid, hei, hg, RI, x, y, z):
 
     return ITFF
 
-wid = 128
-hei = 128
-walldistance = 7
-FL = 107.57
-hg = 16//2
-RI = np.eye(3, 3)
-K_03 = np.array([[FL, 0, wid//2 ],
-			    [0, FL, hei//2 ],
-			    [0, 0, 1, ]])  
-print(K_03)
-wall = arsenal.makewall(walldistance, FL, wid, hei, hg)
+# wid = 128
+# hei = 128
+# walldistance = 7
+# FL = 107.57
+# hg = 16//2
+# RI = np.eye(3, 3)
+# K_03 = np.array([[FL, 0, wid//2 ],
+# 			    [0, FL, hei//2 ],
+# 			    [0, 0, 1, ]])  
+# print(K_03)
+# wall = arsenal.makewall(walldistance, FL, wid, hei, hg)
 
-hsv = np.zeros((hei, wid, 3)).astype(np.float32)
-hsv[...,1] = 255
-translation_O = np.array([0, 0, 0]).reshape(3, 1)
-AV = 0.25 #perframe
+# hsv = np.zeros((hei, wid, 3)).astype(np.float32)
+# hsv[...,1] = 255
+# translation_O = np.array([0, 0, 0]).reshape(3, 1)
+# AV = 0.25 #perframe
 
-Proll = make_Ideal_RF(wall, K_03, wid, hei, hg, translation_O, AV, 0, 0)
-Ppitch = make_Ideal_RF(wall, K_03, wid, hei, hg, translation_O, 0, AV, 0)
-Pyaw = make_Ideal_RF(wall, K_03, wid, hei, hg, translation_O, 0, 0, AV)
-Nroll = make_Ideal_RF(wall, K_03, wid, hei, hg, translation_O, -AV, 0, 0)
-Npitch = make_Ideal_RF(wall, K_03, wid, hei, hg, translation_O, 0, -AV, 0)
-Nyaw = make_Ideal_RF(wall, K_03, wid, hei, hg, translation_O, 0, 0, -AV)
+# Proll = make_Ideal_RF(wall, K_03, wid, hei, hg, translation_O, AV, 0, 0)
+# Ppitch = make_Ideal_RF(wall, K_03, wid, hei, hg, translation_O, 0, AV, 0)
+# Pyaw = make_Ideal_RF(wall, K_03, wid, hei, hg, translation_O, 0, 0, AV)
+# Nroll = make_Ideal_RF(wall, K_03, wid, hei, hg, translation_O, -AV, 0, 0)
+# Npitch = make_Ideal_RF(wall, K_03, wid, hei, hg, translation_O, 0, -AV, 0)
+# Nyaw = make_Ideal_RF(wall, K_03, wid, hei, hg, translation_O, 0, 0, -AV)
 
 """
 print(Ppitch.shape)
