@@ -7,7 +7,10 @@ import cv2
 import arsenal
 from make_Template import make_Ideal_RF, make_Ideal_TF
 from timeit import default_timer as timer
-from scipy.special import softmax
+# from scipy.special import softmax
+import pyvista as pv
+from pyvistaqt import BackgroundPlotter
+import time
 # Camera object to create the snaps/frames/images that
 #  will be deserialized later in the opencv code
 
@@ -176,7 +179,116 @@ for i in IdealTFlowList:
 currentFrame = 0
 # dis = cv2.DISOpticalFlow_create(0)
 # dis.setFinestScale(1)
-start_point = np.array([0, 0, 0])
+start_point = np.array([0, 0, 0]).astype(np.float64)
+All_points = []
+
+# Create sample 3D points (replace these with your 3D model points)
+points = np.array([
+    [0, 0, 0],
+    [0, 0, 0],
+    [20, 0, 0],
+    [0, 20, 0],
+    [0, 0, 20],
+    [10, 0, 0],
+    [0, 10, 0],
+    [0, 0, 10],
+    [5, 0, 0],
+    [0, 5, 0],
+    [0, 0, 5],
+    [30, 0, 0],
+    [0, 30, 0],
+    [0, 0, 30],
+    [25, 0, 0],
+    [0, 25, 0],
+    [0, 0, 25],
+    [15, 0, 0],
+    [0, 15, 0],
+    [0, 0, 15],
+    [-20, 0, 0],
+    [0, -20, 0],
+    [0, 0, -20],
+    [-10, 0, 0],
+    [0, -10, 0],
+    [0, 0, -10],
+    [-5, 0, 0],
+    [0, -5, 0],
+    [0, 0, -5],
+    [-30, 0, 0],
+    [0, -30, 0],
+    [0, 0, -30],
+    [-25, 0, 0],
+    [0, -25, 0],
+    [0, 0, -25],
+    [-15, 0, 0],
+    [0, -15, 0],
+    [0, 0, -15],
+])
+
+# grid = pv.UniformGrid()
+# grid.points = points
+polydata = pv.PolyData(points)
+
+colors = np.array([
+    [2, 2, 2, 1],
+    [0, 0, 0, 1],
+    [0.9, 0.9, 0.9, 1],
+    [1.3, 1.4, 1.5, 1],
+    [0.1, 0.3, 0.5, 1],
+    [0.9, 0.9, 0.9, 1],
+    [1.3, 1.4, 1.5, 1],
+    [0.1, 0.3, 0.5, 1],
+    [0.9, 0.9, 0.9, 1],
+    [1.3, 1.4, 1.5, 1],
+    [0.1, 0.3, 0.5, 1],
+    [0.9, 0.9, 0.9, 1],
+    [1.3, 1.4, 1.5, 1],
+    [0.1, 0.3, 0.5, 1],
+    [0.9, 0.9, 0.9, 1],
+    [1.3, 1.4, 1.5, 1],
+    [0.1, 0.3, 0.5, 1],
+    [0.9, 0.9, 0.9, 1],
+    [1.3, 1.4, 1.5, 1],
+    [0.1, 0.3, 0.5, 1],
+    [0.9, 0.9, 0.9, 1],
+    [1.3, 1.4, 1.5, 1],
+    [0.1, 0.3, 0.5, 1],
+    [0.9, 0.9, 0.9, 1],
+    [1.3, 1.4, 1.5, 1],
+    [0.1, 0.3, 0.5, 1],
+    [0.9, 0.9, 0.9, 1],
+    [1.3, 1.4, 1.5, 1],
+    [0.1, 0.3, 0.5, 1],
+    [0.9, 0.9, 0.9, 1],
+    [1.3, 1.4, 1.5, 1],
+    [0.1, 0.3, 0.5, 1],
+    [0.9, 0.9, 0.9, 1],
+    [1.3, 1.4, 1.5, 1],
+    [0.1, 0.3, 0.5, 1],
+    [0.9, 0.9, 0.9, 1],
+    [1.3, 1.4, 1.5, 1],
+    [0.1, 0.3, 0.5, 1],
+])
+
+# grid.point_arrays['colors'] = colors
+polydata.point_data['colors'] = colors
+# Create a pyvista.PolyData object from the points
+# polydata = pv.PolyData(points)
+
+# Create a plotter and add the points
+plotter = BackgroundPlotter()
+plotter.add_mesh(polydata, scalars='colors', point_size=10, render_points_as_spheres=True)
+
+# Add axes for reference
+# Add axes for reference
+plotter.add_axes()
+
+# Set initial camera position
+camera_position = [
+    (50, 50, 50),  # Camera location
+    (0, 0, 0),  # Focal point
+    (0, -1, 0)   # View up direction
+]
+plotter.camera_position = camera_position
 
 while(True):
     Vectorimage = np.zeros((320, 320, 3), np.uint8)
@@ -202,17 +314,28 @@ while(True):
     if np.mean(DotResult) > 5:
         # DotResult = softmax(DotResult).tolist()
         # print(np.round(DotResult/np.sum(DotResult), 1))
-        end_point = np.array([GraphArray[1] - GraphArray[0], GraphArray[3] - GraphArray[2], GraphArray[5] - GraphArray[4]])
-        print(np.round(end_point, 3))
+        end_point = np.array([GraphArray[0] - GraphArray[1], GraphArray[3] - GraphArray[2], GraphArray[4] - GraphArray[5]])
+        print('vectors', np.round(end_point, 3))
+        
+        start_point += end_point
+        print('positions', np.round(start_point, 3))
     
         
         dist_coef = np.zeros((4, 1))
-        KK = np.array([[500, 0, 160], [0, 500, 160], [0, 0, 1]]).astype(np.float32)
-        points, _ = cv2.projectPoints(np.array([end_point]), (0, 0, 0), (0, 0, 0), KK, dist_coef)
-        start_point_2d = tuple(map(int, points[0][0]))
-        end_point_2d = (160, 160)
-        cv2.line(Vectorimage, start_point_2d, end_point_2d, (255, 255, 255), 2)
-        
+        KK = np.array([[150, 0, 160], [0, 150, 160], [0, 0, 1]]).astype(np.float32)
+        # KK = np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1]]).astype(np.float32)
+        points, _ = cv2.projectPoints(np.array([start_point]), (0, 0, 0), (0, 0, 0), KK, dist_coef)
+
+
+        # time.sleep(0.1)
+
+        # start_point_2d = tuple(map(int, points[0][0]))
+        # end_point_2d = (160, 160)
+        # cv2.line(Vectorimage, start_point_2d, end_point_2d, (255, 255, 255), 2)
+        # All_points.append(start_point)
+        polydata.points[0] = start_point
+        plotter.update()
+
         #print(np.round(DotResult, 3))
         # print(IdealTFlowListname[DotResult.index(np.max(DotResult))])
 
