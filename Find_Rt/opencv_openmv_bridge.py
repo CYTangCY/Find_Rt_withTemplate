@@ -298,7 +298,7 @@ while(True):
     cap = Camera(device='/dev/ttyACM0')
     # Capture frame-by-frame
     im1 = cap.read_image()
-    # im1 = cv2.cvtColor(np.float32(im1), cv2.COLOR_GRAY2BGR)
+    im1 = cv2.cvtColor(im1, cv2.COLOR_BGR2GRAY)
     # im1 = cv2.undistort(im1, K_03, dist_coeffs, None, K_03)
     # im1 = cv2.cvtColor(im1.astype(np.uint8), cv2.COLOR_RGB2GRAY)
     if currentFrame == 0:
