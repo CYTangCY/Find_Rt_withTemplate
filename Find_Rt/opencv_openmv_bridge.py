@@ -5,7 +5,7 @@ import serial
 from PIL import Image as PILImage
 import cv2
 import arsenal
-from make_Template import make_Ideal_RF, make_Ideal_TF
+from make_Template import make_Ideal_RF, make_Ideal_TF, make_IRF
 from timeit import default_timer as timer
 # from scipy.special import softmax
 import pyvista as pv
@@ -13,6 +13,43 @@ from pyvistaqt import BackgroundPlotter
 import time
 # Camera object to create the snaps/frames/images that
 #  will be deserialized later in the opencv code
+import sys
+sys.path.append("/home/Sakura/.pyenv/versions/3.8.6/lib/python3.8/site-packages/")
+import pyopengv
+
+
+def extract_features_and_keypoints(image):
+    # 使用SIFT或ORB等特徵提取器提取特徵
+    sift = cv2.xfeatures2d.SIFT_create()
+    keypoints, descriptors = sift.detectAndCompute(image, None)
+    return keypoints, descriptors
+
+def match_features(descriptors1, descriptors2):
+    # 使用暴力匹配或FLANN匹配器進行特徵匹配
+    bf = cv2.BFMatcher()
+    matches = bf.knnMatch(descriptors1, descriptors2, k=2)
+
+    # 應用比率測試（Lowe's ratio test）以選擇優秀的匹配對
+    good_matches = []
+    for m, n in matches:
+        if m.distance < 0.75 * n.distance:
+            good_matches.append(m)
+    return good_matches
+
+def keypoints_to_points(keypoints1, keypoints2, matches):
+    points1 = []
+    points2 = []
+    for match in matches:
+        points1.append(keypoints1[match.queryIdx].pt)
+        points2.append(keypoints2[match.trainIdx].pt)
+    return np.array(points1), np.array(points2)
+
+def normalized_bearing_vectors(points, camera_matrix):
+    # 將圖像點投影到相機坐標系
+    points_normalized = cv2.undistortPoints(points.reshape(-1, 1, 2), camera_matrix, None)
+    # 讓 z = 1
+    points_normalized = np.squeeze(points_normalized).reshape(-1, 2)
+    return np.hstack((points_normalized, np.ones((points_normalized.shape[0], 1))))
 
 class Camera:
 
@@ -78,7 +115,7 @@ hsv0[...,1] = 255
 
 translation_O = np.array([0, 0, 0]).reshape(3, 1)
 AV = 0.25 #perframe
-T = 2.3
+T = 2
 
 IdealFlowList = []
 DIdealFlowList = []
@@ -177,8 +214,8 @@ for i in IdealTFlowList:
     # print(new.shape)
 
 currentFrame = 0
-# dis = cv2.DISOpticalFlow_create(0)
-# dis.setFinestScale(1)
+dis = cv2.DISOpticalFlow_create(0)
+dis.setFinestScale(1)
 start_point = np.array([0, 0, 0]).astype(np.float64)
 All_points = []
 
@@ -289,7 +326,8 @@ camera_position = [
     (0, -1, 0)   # View up direction
 ]
 plotter.camera_position = camera_position
-
+detector = cv2.SIFT_create()
+IRF = make_Ideal_RF(wall, K_03, wid, hei, hg, translation_O, AV, 0, 0)
 while(True):
     Vectorimage = np.zeros((320, 320, 3), np.uint8)
     # Create a camera by just giving the ttyACM depending on your connection value
@@ -298,13 +336,38 @@ while(True):
     cap = Camera(device='/dev/ttyACM0')
     # Capture frame-by-frame
     im1 = cap.read_image()
+    im1 = cv2.cvtColor(im1, cv2.COLOR_BGR2GRAY)
     # im1 = cv2.cvtColor(np.float32(im1), cv2.COLOR_GRAY2BGR)
     # im1 = cv2.undistort(im1, K_03, dist_coeffs, None, K_03)
     # im1 = cv2.cvtColor(im1.astype(np.uint8), cv2.COLOR_RGB2GRAY)
+
     if currentFrame == 0:
         im0 = im1
+        keypoints0, descriptors0 = extract_features_and_keypoints(im0)
+
+    keypoints1, descriptors1 = extract_features_and_keypoints(im1)
+    
+    if len(keypoints0) > 20 and len(keypoints1) > 20 :
+        matches = match_features(descriptors0, descriptors1)
+        # points0 = keypoints_to_points(keypoints0, matches)
+        # points1 = keypoints_to_points(keypoints1, matches)
+        points0, points1 = keypoints_to_points(keypoints0, keypoints1, matches)
+        # 使用相對姿態RANSAC旋轉估計相機旋轉矩陣
+        bearing_vectors0 = normalized_bearing_vectors(points0, K_03)
+        bearing_vectors1 = normalized_bearing_vectors(points1, K_03)
+        rotation = pyopengv.relative_pose_ransac_rotation_only(bearing_vectors0.astype(np.float64), bearing_vectors1.astype(np.float64), 1e-6)
+        # matches = match_features(descriptors0, descriptors1)
+        # rotation_matrix = compute_relative_rotation(keypoints0, keypoints1, matches)
+
+        # print('Rota')
+        # print(np.round(rotation_matrix, 3))
+        IRF = -make_IRF(wall, K_03, wid, hei, hg, translation_O, rotation)
+    else:
+        IRF = np.zeros((128,128,2))
+    
     # flow = dis.calc(im0, im1, None, )
     flow = cv2.calcOpticalFlowFarneback(im0, im1, None, 0.5, 8, 15, 3, 5, 1.2, 0)
+    flow = flow - IRF
     Dflow = arsenal.meanOpticalFlow(flow)
     DotResult = arsenal.dotWithTemplatesOpt(Dflow.flatten(), DIdealTFlowList)
     
@@ -315,10 +378,10 @@ while(True):
         # DotResult = softmax(DotResult).tolist()
         # print(np.round(DotResult/np.sum(DotResult), 1))
         end_point = np.array([GraphArray[0] - GraphArray[1], GraphArray[3] - GraphArray[2], GraphArray[4] - GraphArray[5]])
-        print('vectors', np.round(end_point, 3))
+        # print('vectors', np.round(end_point, 3))
         
         start_point += end_point
-        print('positions', np.round(start_point, 3))
+        # print('positions', np.round(start_point, 3))
     
         
         dist_coef = np.zeros((4, 1))
@@ -375,7 +438,7 @@ while(True):
 
     bgr = cv2.resize(bgr, (320, 320))
 
-    mag0, ang0 = cv2.cartToPolar(Pz[...,0], Pz[...,1])
+    mag0, ang0 = cv2.cartToPolar(IRF[...,0], IRF[...,1])
     hsv0[...,0] = ang0*180/np.pi/2
     # hsv[...,2] = cv2.normalize(mag,None,0,255,cv2.NORM_MINMAX)
     hsv0[...,2] = mag0*3
@@ -401,3 +464,5 @@ while(True):
     # To stop duplicate images
     currentFrame += 1
     im0 = im1
+    keypoints0 = keypoints1
+    descriptors0 = descriptors1

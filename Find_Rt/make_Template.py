@@ -17,6 +17,13 @@ def make_Ideal_TF(wall, K_03, wid, hei, hg, RI, x, y, z):
 
     return ITFF
 
+def make_IRF(wall, K_03, wid, hei, hg, translation_O, RM): 
+
+    Rt_rotate = np.concatenate((RM, translation_O), axis=1)
+    ScalarIRF, idealRotateFlow = arsenal.RYP(wall, K_03, Rt_rotate, hei, wid, hg)
+
+    return idealRotateFlow
+
 # wid = 128
 # hei = 128
 # walldistance = 7
