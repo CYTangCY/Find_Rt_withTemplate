@@ -51,6 +51,16 @@ def normalized_bearing_vectors(points, camera_matrix):
     points_normalized = np.squeeze(points_normalized).reshape(-1, 2)
     return np.hstack((points_normalized, np.ones((points_normalized.shape[0], 1))))
 
+# only opencv
+def estimate_relative_pose(kp1, kp2, matches, K):
+    src_pts = kp1.reshape(-1, 1, 2)
+    dst_pts = kp2.reshape(-1, 1, 2)
+
+    E, mask = cv2.findEssentialMat(src_pts, dst_pts, K, method=cv2.RANSAC, prob=0.999, threshold=1.0)
+    _, R, t, mask = cv2.recoverPose(E, src_pts, dst_pts, K)
+
+    return R, t
+
 class Camera:
 
     def __init__(self, device='/dev/ttyACM0'):
@@ -112,6 +122,9 @@ hsv[...,1] = 255
 
 hsv0 = np.zeros((hei, wid, 3)).astype(np.float32)
 hsv0[...,1] = 255
+
+hsv1 = np.zeros((hei, wid, 3)).astype(np.float32)
+hsv1[...,1] = 255
 
 translation_O = np.array([0, 0, 0]).reshape(3, 1)
 AV = 0.25 #perframe
@@ -328,6 +341,8 @@ camera_position = [
 plotter.camera_position = camera_position
 detector = cv2.SIFT_create()
 IRF = make_Ideal_RF(wall, K_03, wid, hei, hg, translation_O, AV, 0, 0)
+RR_total = np.eye(3)
+TT_total = np.zeros((3, 1))
 while(True):
     Vectorimage = np.zeros((320, 320, 3), np.uint8)
     # Create a camera by just giving the ttyACM depending on your connection value
@@ -353,31 +368,42 @@ while(True):
         # points1 = keypoints_to_points(keypoints1, matches)
         points0, points1 = keypoints_to_points(keypoints0, keypoints1, matches)
         # 使用相對姿態RANSAC旋轉估計相機旋轉矩陣
-        bearing_vectors0 = normalized_bearing_vectors(points0, K_03)
-        bearing_vectors1 = normalized_bearing_vectors(points1, K_03)
-        rotation = pyopengv.relative_pose_ransac_rotation_only(bearing_vectors0.astype(np.float64), bearing_vectors1.astype(np.float64), 1e-6)
+        # bearing_vectors0 = normalized_bearing_vectors(points0, K_03)
+        # bearing_vectors1 = normalized_bearing_vectors(points1, K_03)
+        # rotation = pyopengv.relative_pose_ransac_rotation_only(bearing_vectors0.astype(np.float64), bearing_vectors1.astype(np.float64), 1e-6)
+
+        RR, TT = estimate_relative_pose(points0, points1, matches, K_03)
+        RR_total = RR.dot(RR_total)
+        # TT = RR.dot(TT)
+        # TT[TT>0.8] = 0
+        # TT[TT<-0.8] = 0
+        # TT = np.reshape(TT, (3))
+        # print(TT.shape)
         # matches = match_features(descriptors0, descriptors1)
         # rotation_matrix = compute_relative_rotation(keypoints0, keypoints1, matches)
 
         # print('Rota')
         # print(np.round(rotation_matrix, 3))
-        IRF = -make_IRF(wall, K_03, wid, hei, hg, translation_O, rotation)
+        # IRF = -make_IRF(wall, K_03, wid, hei, hg, translation_O, rotation)
+        IRF = make_IRF(wall, K_03, wid, hei, hg, translation_O, RR)
     else:
         IRF = np.zeros((128,128,2))
     
     # flow = dis.calc(im0, im1, None, )
     flow = cv2.calcOpticalFlowFarneback(im0, im1, None, 0.5, 8, 15, 3, 5, 1.2, 0)
+    ori_flow = flow
     flow = flow - IRF
     Dflow = arsenal.meanOpticalFlow(flow)
     DotResult = arsenal.dotWithTemplatesOpt(Dflow.flatten(), DIdealTFlowList)
     
-    DotResult[DotResult<25] = 0
+    DotResult[DotResult<50] = 0
     GraphArray = np.round(DotResult/np.sum(DotResult), 3)
-    # print(DotResult.index(max(DotResult)))
+    # print(np.round(DotResult, 3))
     if np.mean(DotResult) > 5:
         # DotResult = softmax(DotResult).tolist()
         # print(np.round(DotResult/np.sum(DotResult), 1))
         end_point = np.array([GraphArray[0] - GraphArray[1], GraphArray[3] - GraphArray[2], GraphArray[4] - GraphArray[5]])
+        # end_point = np.array([TT[0], TT[1], TT[2]])
         # print('vectors', np.round(end_point, 3))
         
         start_point += end_point
@@ -435,7 +461,6 @@ while(True):
     hsv = hsv.astype(np.uint8)
     # print(hsv.shape)
     bgr = cv2.cvtColor(hsv,cv2.COLOR_HSV2BGR)
-
     bgr = cv2.resize(bgr, (320, 320))
 
     mag0, ang0 = cv2.cartToPolar(IRF[...,0], IRF[...,1])
@@ -443,15 +468,21 @@ while(True):
     # hsv[...,2] = cv2.normalize(mag,None,0,255,cv2.NORM_MINMAX)
     hsv0[...,2] = mag0*3
     hsv0 = hsv0.astype(np.uint8)
-    # print(hsv.shape)
     bgr0 = cv2.cvtColor(hsv0,cv2.COLOR_HSV2BGR)
-
     bgr0 = cv2.resize(bgr0, (320, 320))
+
+    mag1, ang1 = cv2.cartToPolar(ori_flow[...,0], ori_flow[...,1])
+    hsv1[...,0] = ang1*180/np.pi/2
+    # hsv[...,2] = cv2.normalize(mag,None,0,255,cv2.NORM_MINMAX)
+    hsv1[...,2] = mag1*3
+    hsv1 = hsv1.astype(np.uint8)
+    bgr1 = cv2.cvtColor(hsv1,cv2.COLOR_HSV2BGR)
+    bgr1 = cv2.resize(bgr1, (320, 320))
 
     IMG = cv2.cvtColor(im1, cv2.COLOR_GRAY2BGR)
     IMG = cv2.resize(IMG, (320, 320))
     merge0 = np.concatenate((IMG, bgr), axis=1)
-    merge1 = np.concatenate((Vectorimage, bgr0), axis=1)
+    merge1 = np.concatenate((bgr0, bgr1), axis=1)
     merge = np.concatenate((merge0, merge1), axis=0)
     cv2.imshow('merge', merge)
     # cv2.imshow('sda', Vectorimage)
